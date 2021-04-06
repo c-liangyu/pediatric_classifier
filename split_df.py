@@ -15,7 +15,7 @@ from pydicom.pixel_data_handlers.util import apply_voi_lut
 
 # df = pd.concat([train_df, val_df, test_df], ignore_index=True)
 
-csv_path = 'annotations_cls_1803.csv'
+csv_path = 'annotations_cls_2603.csv'
 df = pd.read_csv(csv_path)
 
 def iserror(func, *args, **kw):
@@ -64,7 +64,7 @@ def filter_df(df):
 def Iterative_Stratifier_Split(df, ratio=0.15):
     img_ids = df.image_id.unique()
     print("Creating one-hot labels ...")
-    labels = np.zeros((len(img_ids), 13), dtype=np.uint8)
+    labels = np.zeros((len(img_ids), len(df.columns)-1), dtype=np.uint8)
     for i, img_id in enumerate(tqdm(img_ids)):
     # for i, img_id in enumerate(img_ids):
         aa = df.loc[df.image_id == img_id, :].to_numpy()[0, 1:]
@@ -79,7 +79,6 @@ def Iterative_Stratifier_Split(df, ratio=0.15):
     return train_df, test_df
 
 # filter data frame
-
 cur_df = filter_df(df)
 # cur_df = df
 # cur_df = df[df.class_id!=7].reset_index(drop = True)

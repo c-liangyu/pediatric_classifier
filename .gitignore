@@ -152,5 +152,8 @@ experiment/*
 *.onnx
 *.ckpt
 *.csv
+*.jpg
+*.yml
+*.ipynb
 
 # End of https://www.toptal.com/developers/gitignore/api/vscode,python

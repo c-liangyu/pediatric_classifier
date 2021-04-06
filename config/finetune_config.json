@@ -8,7 +8,7 @@
     "mix_precision": true,
     "pretrained": true,
     "distributed": false,
-    "parallel":false,
+    "parallel": false,
     "type": "pediatric",
     "conditional_training": false,
     "smooth_mode": "pos",
@@ -29,8 +29,8 @@
     "weight_decay": 0.0,
     "epochs": 40,
     "iter_log": 50,
-    "log_dir": "trash",
-    "ckp_path": "",
+    "log_dir": "DenseNet121_data2203_finetune_chexpmic_mixup",
+    "ckp_path": "experiment/DenseNet121_1903_chexmic/checkpoint/backbone.ckpt",
     "disease_classes": ["Other opacity", "Reticulonodular opacity", "Peribronchovascular interstitial opacity", "Diffuse aveolar opacity", "Lung hyperinflation",
         "Consolidation", "Bronchial thickening", "No finding", "Bronchitis", "Brocho-pneumonia", "Other disease", "Bronchiolitis", "Pneumonia"]
 }

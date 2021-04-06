@@ -1,6 +1,85 @@
 import torch.nn as nn
 import torch
 import torch.nn.functional as F
+import os
+
+def save_dense_backbone(model, ckp_path):
+    if os.path.exists(os.path.dirname(ckp_path)):
+        torch.save({'state_dict': model.features.state_dict(),
+                    'epoch': 0, 'iter': 0}, ckp_path)
+    else:
+        print("Save path not exist!!!")
+
+def load_dense_backbone(model, ckp_path, device, strict):
+    if os.path.exists(os.path.dirname(ckp_path)):
+        ckp = torch.load(ckp_path, map_location=device)
+        model.features.load_state_dict(ckp['state_dict'], strict=strict)
+    else:
+        print("Save path not exist!!!")
+
+def save_resnet_backbone(model, ckp_path):
+    if os.path.exists(os.path.dirname(ckp_path)):
+        save_model = model
+        delattr(save_model,'avgpool')
+        delattr(save_model,'fc')
+        torch.save({'state_dict': save_model.state_dict(),
+                    'epoch': 0, 'iter': 0}, ckp_path)
+    else:
+        print("Save path not exist!!!")
+
+def load_resnet_backbone(model, ckp_path, device, strict):
+    if os.path.exists(os.path.dirname(ckp_path)):
+        ckp = torch.load(ckp_path, map_location=device)
+        model.load_state_dict(ckp['state_dict'], strict=strict)
+    else:
+        print("Save path not exist!!!")
+
+def save_efficient_backbone(model, ckp_path):
+    if os.path.exists(os.path.dirname(ckp_path)):
+        torch.save({'state_dict': model.features.state_dict(),
+                    'epoch': 0, 'iter': 0}, ckp_path)
+    else:
+        print("Save path not exist!!!")
+
+def load_efficient_backbone(model, ckp_path, device, strict):
+
+    if os.path.exists(os.path.dirname(ckp_path)):
+        ckp = torch.load(ckp_path, map_location=device)
+        model.features.load_state_dict(ckp['state_dict'], strict=strict)
+    else:
+        print("Save path not exist!!!")
+
+class Ensemble(nn.ModuleList):
+    # Ensemble of models
+    def __init__(self):
+        super(Ensemble, self).__init__()
+
+    def forward(self, x):
+        y = []
+        for module in self:
+            y.append(nn.Sigmoid()(module(x)))
+        # y = torch.stack(y).max(0)[0]  # max ensemble
+        y = torch.stack(y, 0).mean(0)  # mean ensemble
+        # y = torch.cat(y, 1)  # nms ensemble
+
+        return y
+
+class AverageMeter(object):
+    """Computes and stores the average and current value"""
+    def __init__(self):
+        self.reset()
+
+    def reset(self):
+        self.val = 0
+        self.avg = 0
+        self.sum = 0
+        self.count = 0
+
+    def update(self, val, n=1):
+        self.val = val
+        self.sum += val * n
+        self.count += n
+        self.avg = self.sum / self.count
 
 class ResNeSt_parallel(nn.Module):
     def __init__(self, pre_model, num_classes):
