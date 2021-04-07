@@ -1,6 +1,4 @@
-from torch.nn.modules import loss
 from easydict import EasyDict as edict
-from torch.utils.data import DataLoader
 import json, os, torch
 from metrics import F1, ACC, AUC, Precision, Recall
 from torch.nn import BCELoss, BCEWithLogitsLoss
@@ -8,7 +6,6 @@ from torch.utils.tensorboard import SummaryWriter
 from model.chexpert import CheXpert_model
 from data.dataset import create_loader
 import warnings
-import numpy as np
 import argparse
 
 # warnings.simplefilter('always')

@@ -3,11 +3,9 @@ os.environ["KMP_DUPLICATE_LIB_OK"]="TRUE"
 
 # from data.dataset import ImageDataset_full
 from easydict import EasyDict as edict
-from torch.utils.data import DataLoader
 import json, os
 from model.chexpert import CheXpert_model
 from metrics import AUC_ROC, F1, ACC, AUC, Precision, Recall, Specificity
-from torch.optim import Adam
 from torch.nn import BCELoss, BCEWithLogitsLoss
 import warnings
 import pandas as pd
@@ -50,26 +48,26 @@ train_loader = create_loader(cfg.train_csv, data_dir, cfg, mode='train', dicom=F
 val_loader = create_loader(cfg.dev_csv, data_dir, cfg, mode='val', dicom=False, type=cfg.type)
 test_loader = create_loader(cfg.test_csv, data_dir, cfg, mode='test', dicom=False, type=cfg.type)
 
-metrics_dict = {'acc': ACC(), 'auc':AUC(), 'precision':Precision(), 'recall':Recall(), 'specificity':Specificity(), 'f1':F1()}
+metrics_dict = {'auc':AUC(), 'sensitivity':Recall(), 'specificity':Specificity(), 'f1':F1()}
 
 id_leaf = [2,4,5,6,7,8]
 id_obs = [0,1,2,3,4,5,6,7,8,9,10,11,12]
 
 #------------------------------- additional config for ensemble ---------------------------------------
-# model_names=[
-#     'dense',
-#     'resnet',
-#     'dense',
-#     # 'efficient',
-#     #'resnest'
-#     ]
-# ids = [
-#     '121',
-#     '101',
-#     '169',
-#     # 'b4',
-#     #'101'
-#     ]
+model_names=[
+    'dense',
+    'resnet',
+    'dense',
+    # 'efficient',
+    #'resnest'
+    ]
+ids = [
+    '121',
+    '101',
+    '169',
+    # 'b4',
+    #'101'
+    ]
 
 # ckp_paths = [
 #     'experiment/DenseNet121_data2203_finetune_chexpmic_cutmix/checkpoint/best.ckpt',
@@ -77,21 +75,28 @@ id_obs = [0,1,2,3,4,5,6,7,8,9,10,11,12]
 #     'experiment/DenseNet169_data2203_finetune_chexpmic_cutmix/checkpoint/best.ckpt',
 # ]
 
+ckp_paths = [
+    'experiment/DenseNet121_data2203_finetune_chexpmic_mixup/checkpoint/best.ckpt',
+    'experiment/Resnet101_data2203_finetune_chexpmic_mixup/checkpoint/best.ckpt',
+    'experiment/DenseNet169_data2203_finetune_chexpmic_mixup/checkpoint/best.ckpt'
+]
+
 # # ckp_paths = [
 # #     'experiment/DenseNet121_data2203_finetune_chexpmic/checkpoint/best.ckpt',
 # #     'experiment/Resnet101_data2203_finetune_chexpmic/checkpoint/best.ckpt',
 # #     'experiment/DenseNet169_data2203_finetune_chexpmic/checkpoint/best.ckpt',
 # #     ]
 
-# cfg.backbone = model_names
-# cfg.id = ids
-# cfg.ckp_path = ckp_paths
+cfg.backbone = model_names
+cfg.id = ids
+cfg.ckp_path = ckp_paths
 #------------------------------------------------------------------------------------------------------
 
 n_boostrap = 10000
 
 chexpert_model = CheXpert_model(cfg, loss_func, metrics_dict)
-# chexpert_model.load_ckp(cfg.ckp_path)
+if not isinstance(cfg.ckp_path, list):
+    chexpert_model.load_ckp(cfg.ckp_path)
 chexpert_model.thresholding(val_loader)
 metrics, ci_dict = chexpert_model.test(val_loader, get_ci=True, n_boostrap=n_boostrap)
 # print(cfg.backbone+'-'+cfg.id+':')

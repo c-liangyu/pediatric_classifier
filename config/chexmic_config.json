@@ -30,7 +30,7 @@
     "epochs": 5,
     "iter_log": 1000,
     "log_dir": "Resnet101_chexmic",
-    "ckp_path": "experiment/Resnet101_chexmic/checkpoint/best.ckpt",
+    "ckp_path": "",
     "disease_classes": ["Other opacity", "Reticulonodular opacity", "Peribronchovascular interstitial opacity", "Diffuse aveolar opacity", "Lung hyperinflation",
         "Consolidation", "Bronchial thickening", "No finding", "Bronchitis", "Brocho-pneumonia", "Other disease", "Bronchiolitis", "Pneumonia"]
 }

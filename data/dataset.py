@@ -14,8 +14,6 @@ from torch.utils.data.distributed import DistributedSampler
 from torchvision import transforms
 from data.utils import transform
 import time
-from data.cutmix import CutMixCollator
-
 
 def preprocess(img_size): return Compose(
     [Resize(img_size[0], img_size[1]), ToTensor()])
