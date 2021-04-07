@@ -33,7 +33,7 @@ def get_models(cfg):
         backbones = cfg.backbone
         ids = cfg.id
         ckp_paths = cfg.ckp_path
-        models = Ensemble()
+        models = Ensemble(mean=False)
         childs = []
         for i in range(len(backbones)):
             cfg.backbone = backbones[i]
@@ -41,15 +41,13 @@ def get_models(cfg):
             cfg.ckp_path = ckp_paths[i]
             model, childs_cut = get_model(cfg)
             if os.path.isfile(cfg.ckp_path):
-                if cfg.device == 'cpu':
-                    device = torch.device("cpu")
-                else:
-                    device = torch.device("cuda:"+str(cfg.device))
-                load_ckp(model, cfg.ckp_path, device, cfg.distributed, cfg.parallel, strict=True)
+                load_ckp(model, cfg.ckp_path, torch.device("cpu"), cfg.distributed, cfg.parallel, strict=True)
             models.append(model), childs.append(childs_cut)
         cfg.backbone = backbones
         cfg.id = ids
         cfg.ckp_path = ckp_paths
+        for param in models.parameters():
+            param.requires_grad = False
         return models, childs
 
 def get_model(cfg):

@@ -29,7 +29,7 @@
     "weight_decay": 0.0,
     "epochs": 40,
     "iter_log": 50,
-    "log_dir": "Resnet101_data2203_mixup",
+    "log_dir": "stacking_example",
     "ckp_path": "",
     "disease_classes": ["Other opacity", "Reticulonodular opacity", "Peribronchovascular interstitial opacity", "Diffuse aveolar opacity", "Lung hyperinflation",
         "Consolidation", "Bronchial thickening", "No finding", "Bronchitis", "Brocho-pneumonia", "Other disease", "Bronchiolitis", "Pneumonia"]

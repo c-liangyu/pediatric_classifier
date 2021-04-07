@@ -1,3 +1,4 @@
+from numpy.core.shape_base import stack
 from numpy.lib.stride_tricks import broadcast_to
 import torch.nn as nn
 import numpy as np
@@ -12,7 +13,7 @@ import torch
 import wandb
 from metrics import AUC_ROC
 from data.utils import transform
-from model.models import save_dense_backbone, load_dense_backbone, save_resnet_backbone, load_resnet_backbone, Ensemble, AverageMeter
+from model.models import Stacking, save_dense_backbone, load_dense_backbone, save_resnet_backbone, load_resnet_backbone, Ensemble, AverageMeter
 from model.utils import get_models, get_str, tensor2numpy, get_optimizer, load_ckp, lrfn, get_metrics
 from confidence_interval import boostrap_ci
 
@@ -349,7 +350,6 @@ class CheXpert_model():
                 s = "Epoch [{}/{}] Iter [{}/{}]:\n".format(
                     epoch+1, epochs, i+1, n_iter)
                 s += "{}_{} {:.3f}\n".format('train', 'loss', running_loss.avg)
-                print(s)
                 running_metrics_test = self.test(
                     val_loader, False)
                 torch.set_grad_enabled(True)
@@ -424,6 +424,62 @@ class CheXpert_model():
     def eval_CI(self, labels, preds, n_boostrap=1000, csv_path=None):
 
         return boostrap_ci(labels, preds, self.metrics, n_boostrap, self.thresh_val, csv_path)
+
+    def stacking(self, train_loader, val_loader, epochs=10, eval_metric='loss'):
+        
+        if not isinstance(self.model, Ensemble):
+            raise Exception("model must be Ensemble!!!")
+        
+        best_metric = 0.0
+        stacking_model = Stacking(len(self.model))
+        for param in stacking_model.parameters():
+            param.requires_grad = True
+        stacking_model.cuda()
+        running_loss = AverageMeter()
+        ckp_dir = os.path.join('experiment', self.cfg.log_dir, 'checkpoint')
+
+        for epoch in range(epochs):
+            stacking_model.train()
+            torch.set_grad_enabled(True)
+            for i, data in enumerate(tqdm.tqdm(train_loader)):
+                imgs, labels = data[0].to(self.device), data[1].to(self.device)
+                origin_pred = self.predict(imgs)
+                preds = stacking_model(origin_pred)
+                loss = self.metrics['loss'](preds, labels)
+                self.optimizer.zero_grad()
+                loss.backward()
+                self.optimizer.step()
+                running_loss.update(loss.item(), imgs.shape[0])
+            s = "Epoch [{}/{}]:\n".format(
+                epoch+1, epochs)
+            s += "{}_{} {:.3f}\n".format('train', 'loss', running_loss.avg)
+            stacking_model.eval()
+            preds_stack = []
+            labels_stack = []
+            for i, data in enumerate(tqdm.tqdm(val_loader)):
+                imgs, labels = data[0].to(self.device), data[1].to(self.device)
+                origin_pred = self.predict(imgs)
+                with torch.no_grad() as tng:
+                    preds = stacking_model(origin_pred)
+                preds_stack.append(preds)
+                labels_stack.append(labels)
+            preds_stack = torch.cat(preds_stack, 0)
+            labels_stack = torch.cat(labels_stack, 0)
+            running_metrics = get_metrics(preds_stack, labels_stack, self.metrics, self.thresh_val)
+            running_metrics.pop('loss')
+            s = get_str(running_metrics, 'val', s)
+            metric_eval = running_metrics[eval_metric]
+            s = s[:-1] + "- mean_"+eval_metric + \
+                    " {:.3f}".format(metric_eval.mean())
+            self.save_ckp(os.path.join(ckp_dir, 'latest.ckpt'), epoch, 0)
+            running_loss.reset()
+            print(s)
+            if metric_eval.mean() > best_metric:
+                best_metric = metric_eval.mean()
+                shutil.copyfile(os.path.join(ckp_dir, 'latest.ckpt'), os.path.join(
+                    ckp_dir, 'best.ckpt'))
+                print('new checkpoint saved!')
+                        
 
     def FAEL(self, loader, val_loader, type='basic', init_lr=0.01, log_iter=100, steps=20, lambda1=0.1, lambda2=2):
         """Run fully associative ensemble learning (FAEL)

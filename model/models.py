@@ -51,16 +51,21 @@ def load_efficient_backbone(model, ckp_path, device, strict):
 
 class Ensemble(nn.ModuleList):
     # Ensemble of models
-    def __init__(self):
+    def __init__(self, mean=True):
         super(Ensemble, self).__init__()
+        self.mean = mean
 
     def forward(self, x):
         y = []
         for module in self:
             y.append(nn.Sigmoid()(module(x)))
         # y = torch.stack(y).max(0)[0]  # max ensemble
-        y = torch.stack(y, 0).mean(0)  # mean ensemble
+        if self.mean:
+            y = torch.stack(y, 0).mean(0)  # mean ensemble
         # y = torch.cat(y, 1)  # nms ensemble
+        else:
+            y = torch.stack(y, 1).unsqueeze(2)
+        # y = self.ensemble(y).squeeze((1,2))
 
         return y
 
@@ -80,6 +85,15 @@ class AverageMeter(object):
         self.sum += val * n
         self.count += n
         self.avg = self.sum / self.count
+
+class Stacking(nn.Module):
+    def __init__(self, n_models=3):
+        super(Stacking, self).__init__()
+        self.ensemble = nn.Conv2d(in_channels=n_models, out_channels=1, kernel_size=1, bias=False)
+
+    def forward(self, x):
+        y = self.ensemble(x).squeeze(1).squeeze(1)
+        return y
 
 class ResNeSt_parallel(nn.Module):
     def __init__(self, pre_model, num_classes):
