@@ -58,6 +58,7 @@ class CheXpert_model():
             if os.path.isfile(self.cfg.ckp_stack):
                 self.stacking_model.load_state_dict(torch.load(
                     self.cfg.ckp_stack, map_location=torch.device("cpu")))
+                self.stacking_model.cuda()
             self.stacking_model.freeze()
         self.loss_func = loss_func
         if metrics is not None:
@@ -438,7 +439,9 @@ class CheXpert_model():
             raise Exception("model must be Ensemble!!!")
 
         optimizer = get_optimizer(self.stacking_model.parameters(), self.cfg)
+        os.makedirs(os.path.join('experiment', self.cfg.log_dir), exist_ok=True)
         ckp_dir = os.path.join('experiment', self.cfg.log_dir, 'checkpoint')
+        os.makedirs(ckp_dir, exist_ok=True)
 
         self.model.freeze()
         self.stacking_model.unfreeze()

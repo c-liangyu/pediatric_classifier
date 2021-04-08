@@ -84,6 +84,7 @@ class Stacking(nn.Module):
         super(Stacking, self).__init__()
         # self.ensemble = nn.Conv2d(in_channels=n_models, out_channels=1, kernel_size=1, bias=False)
         self.ensemble = nn.Linear(in_features=n_models, out_features=1, bias=False)
+        torch.nn.init.xavier_uniform(self.ensemble.weight)
 
     def freeze(self):
         for param in self.parameters():

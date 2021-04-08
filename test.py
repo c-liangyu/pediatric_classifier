@@ -75,17 +75,17 @@ ids = [
 #     'experiment/DenseNet169_data2203_finetune_chexpmic_cutmix/checkpoint/best.ckpt',
 # ]
 
-ckp_paths = [
-    'experiment/DenseNet121_data2203_finetune_chexpmic_mixup/checkpoint/best.ckpt',
-    'experiment/Resnet101_data2203_finetune_chexpmic_mixup/checkpoint/best.ckpt',
-    'experiment/DenseNet169_data2203_finetune_chexpmic_mixup/checkpoint/best.ckpt'
-]
+# ckp_paths = [
+#     'experiment/DenseNet121_data2203_finetune_chexpmic_mixup/checkpoint/best.ckpt',
+#     'experiment/Resnet101_data2203_finetune_chexpmic_mixup/checkpoint/best.ckpt',
+#     'experiment/DenseNet169_data2203_finetune_chexpmic_mixup/checkpoint/best.ckpt'
+# ]
 
-# # ckp_paths = [
-# #     'experiment/DenseNet121_data2203_finetune_chexpmic/checkpoint/best.ckpt',
-# #     'experiment/Resnet101_data2203_finetune_chexpmic/checkpoint/best.ckpt',
-# #     'experiment/DenseNet169_data2203_finetune_chexpmic/checkpoint/best.ckpt',
-# #     ]
+ckp_paths = [
+    'experiment/DenseNet121_data2203_finetune_chexpmic/checkpoint/best.ckpt',
+    'experiment/Resnet101_data2203_finetune_chexpmic/checkpoint/best.ckpt',
+    'experiment/DenseNet169_data2203_finetune_chexpmic/checkpoint/best.ckpt',
+    ]
 
 cfg.backbone = model_names
 cfg.id = ids

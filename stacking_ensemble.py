@@ -1,6 +1,6 @@
 from easydict import EasyDict as edict
 import json, os, torch
-from metrics import F1, ACC, AUC, Precision, Recall
+from metrics import F1, ACC, AUC, Precision, Recall, Specificity
 from torch.nn import BCELoss, BCEWithLogitsLoss, MSELoss
 from torch.utils.tensorboard import SummaryWriter
 from model.chexpert import CheXpert_model
@@ -41,7 +41,7 @@ val_loader = create_loader(cfg.dev_csv, data_dir, cfg, mode='val', dicom=False, 
 # loss_func = BCEWithLogitsLoss()
 loss_func = MSELoss()
 
-metrics_dict = {'acc': ACC(), 'auc':AUC(), 'f1':F1(), 'precision':Precision(), 'recall':Recall()}
+metrics_dict = {'auc':AUC(), 'sensitivity':Recall(), 'specificity':Specificity(), 'f1':F1()}
 loader_dict = {'train': train_loader, 'val': val_loader}
 
 #------------------------------- additional config for ensemble ---------------------------------------
@@ -84,7 +84,7 @@ cfg.ckp_path = ckp_paths
 #------------------------------------------------------------------------------------------------------
 
 chexpert_model = CheXpert_model(cfg, loss_func, metrics_dict)
-chexpert_model.stacking(train_loader, val_loader, epochs=5, eval_metric='auc')
+chexpert_model.stacking(train_loader, val_loader, epochs=cfg.epochs, eval_metric='auc')
 # print(chexpert_model.model)
 
 # chexpert_model.load_ckp(cfg.ckp_path)
