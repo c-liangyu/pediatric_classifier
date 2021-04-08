@@ -5,6 +5,7 @@
     "backbone": "dense",
     "id": "121",
     "device": 0,
+    "ensemble": "none",
     "mix_precision": true,
     "pretrained": false,
     "distributed": false,
@@ -31,6 +32,7 @@
     "iter_log": 50,
     "log_dir": "Resnet101_data2203_finetune_chexpmic_mixup",
     "ckp_path": "experiment/Resnet101_chexmic/checkpoint/backbone.ckpt",
+    "ckp_stack": "",
     "disease_classes": ["Other opacity", "Reticulonodular opacity", "Peribronchovascular interstitial opacity", "Diffuse aveolar opacity", "Lung hyperinflation",
         "Consolidation", "Bronchial thickening", "No finding", "Bronchitis", "Brocho-pneumonia", "Other disease", "Bronchiolitis", "Pneumonia"]
 }

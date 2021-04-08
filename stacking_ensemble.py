@@ -17,7 +17,7 @@ args = parser.parse_args()
 
 
 # cfg_path = './config/chexmic_config.json'
-cfg_path = './config/example.json'
+cfg_path = './config/stacking_config.json'
 
 with open(cfg_path) as f:
     cfg = edict(json.load(f))
@@ -32,7 +32,7 @@ if cfg.distributed:
 else:
     torch.cuda.set_device(cfg.device)
 
-data_dir = '/home/tungthanhlee/thanhtt/assigned_jpeg'
+data_dir = '/home/single1/BACKUP/thanhtt/assigned_jpeg'
 
 train_loader = create_loader(cfg.train_csv, data_dir, cfg, mode='train', dicom=False, type=cfg.type)
 val_loader = create_loader(cfg.dev_csv, data_dir, cfg, mode='val', dicom=False, type=cfg.type)
@@ -84,7 +84,7 @@ cfg.ckp_path = ckp_paths
 #------------------------------------------------------------------------------------------------------
 
 chexpert_model = CheXpert_model(cfg, loss_func, metrics_dict)
-chexpert_model.stacking(train_loader, val_loader, epochs=5)
+chexpert_model.stacking(train_loader, val_loader, epochs=5, eval_metric='auc')
 # print(chexpert_model.model)
 
 # chexpert_model.load_ckp(cfg.ckp_path)

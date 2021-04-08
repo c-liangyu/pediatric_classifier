@@ -41,7 +41,7 @@ else:
 
 # data_dir = '/home/tungthanhlee/bdi_xray/data/images'
 # data_dir = '/media/tungthanhlee/DATA/tienthanh/assigned_jpeg'
-data_dir = '/home/tungthanhlee/thanhtt/assigned_jpeg'
+data_dir = '/home/single1/BACKUP/thanhtt/assigned_jpeg'
 # data_dir = 'annotations_cls_2203/images'
 torch.cuda.set_device(cfg.device)
 train_loader = create_loader(cfg.train_csv, data_dir, cfg, mode='train', dicom=False, type=cfg.type)

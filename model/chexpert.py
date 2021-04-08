@@ -53,13 +53,18 @@ class CheXpert_model():
         else:
             self.device = torch.device("cuda:"+str(self.cfg.device))
         self.model, self.childs_cut = get_models(self.cfg)
+        if self.cfg.ensemble == 'stacking':
+            self.stacking_model = Stacking(len(self.model))
+            if os.path.isfile(self.cfg.ckp_stack):
+                self.stacking_model.load_state_dict(torch.load(
+                    self.cfg.ckp_stack, map_location=torch.device("cpu")))
+            self.stacking_model.freeze()
         self.loss_func = loss_func
         if metrics is not None:
             self.metrics = metrics
             self.metrics['loss'] = self.loss_func
         else:
             self.metrics = {'loss': self.loss_func}
-        self.optimizer = get_optimizer(self.model.parameters(), self.cfg)
         # self.model.to(self.device)
         if cfg.distributed:
             self.model.cuda()
@@ -158,12 +163,15 @@ class CheXpert_model():
         Returns:
             torch.Tensor: model prediction
         """
-        torch.set_grad_enabled(False)
         self.model.eval()
         with torch.no_grad() as tng:
             preds = self.model(image)
-            if not isinstance(self.model, Ensemble):
+            if not isinstance(self.model, Ensemble) and self.cfg.ensemble == 'none':
                 preds = nn.Sigmoid()(preds)
+            elif self.cfg.ensemble == 'average':
+                preds = preds.mean(-1)
+            elif self.cfg.ensemble == 'stacking':
+                preds = self.stacking_model(preds)
 
         return preds
 
@@ -183,7 +191,7 @@ class CheXpert_model():
 
         return tensor2numpy(nn.Sigmoid()(self.predict(image)))
 
-    def predict_loader(self, loader, ensemble=False, cal_loss=False):
+    def predict_loader(self, loader, cal_loss=False):
         """Run prediction on a given dataloader.
 
         Args:
@@ -198,7 +206,6 @@ class CheXpert_model():
         running_loss = []
         ova_len = loader.dataset._num_image
         loop = tqdm.tqdm(enumerate(loader), total=len(loader))
-        img_ids = []
         for i, data in loop:
             imgs, labels = data[0].to(self.device), data[1].to(self.device)
             if self.cfg.tta:
@@ -216,9 +223,6 @@ class CheXpert_model():
                 preds = preds[:, loader.dataset.id_leaf]
                 labels = labels[:, loader.dataset.id_leaf]
             iter_len = imgs.size()[0]
-            if ensemble:
-                preds = torch.mm(preds, self.ensemble_weights)
-                labels = labels[:, loader.dataset.id_obs]
             preds_stack.append(preds)
             labels_stack.append(labels)
             if cal_loss:
@@ -247,11 +251,14 @@ class CheXpert_model():
         # wandb.init(name=self.cfg.log_dir,
         #            project='Pediatric Multi-label Classifier',
         #            entity='dolphin')
+
+        optimizer = get_optimizer(self.model.parameters(), self.cfg)
+
         if use_lr_sch:
             lr_sch = torch.optim.lr_scheduler.LambdaLR(
-                self.optimizer, lr_lambda=lrfn)
+                optimizer, lr_lambda=lrfn)
             # lr_sch = torch.optim.lr_scheduler.StepLR(
-            #     self.optimizer, int(epochs*1/2), self.cfg.lr/10)
+            #     optimizer, int(epochs*1/2), self.cfg.lr/10)
             lr_hist = []
         else:
             lr_sch = None
@@ -334,14 +341,14 @@ class CheXpert_model():
                         #     loss = self.metrics['loss'](preds, labels)
                     preds = nn.Sigmoid()(preds)
                     running_loss.update(loss.item(), imgs.shape[0])
-                    self.optimizer.zero_grad()
+                    optimizer.zero_grad()
                     if self.cfg.mix_precision:
                         scaler.scale(loss).backward()
-                        scaler.step(self.optimizer)
+                        scaler.step(optimizer)
                         scaler.update()
                     else:
                         loss.backward()
-                        self.optimizer.step()
+                        optimizer.step()
                     i += 1
 
                 # if wandb:
@@ -390,7 +397,7 @@ class CheXpert_model():
         else:
             return None
 
-    def test(self, loader, ensemble=False, get_ci=False, n_boostrap=10000):
+    def test(self, loader, get_ci=False, n_boostrap=10000):
         """Run testing
 
         Args:
@@ -403,7 +410,7 @@ class CheXpert_model():
         # if self.cfg.conditional_training and (self.cfg.type == 'pediatric' or self.cfg.type == 'chexmic'):
         #     self.thresh_val = self.thresh_val[loader.dataset.id_leaf]
         preds_stack, labels_stack, running_loss = self.predict_loader(
-            loader, ensemble, cal_loss=True)
+            loader, cal_loss=True)
 
         running_metrics = get_metrics(
             preds_stack, labels_stack, self.metrics, self.thresh_val)
@@ -426,52 +433,41 @@ class CheXpert_model():
         return boostrap_ci(labels, preds, self.metrics, n_boostrap, self.thresh_val, csv_path)
 
     def stacking(self, train_loader, val_loader, epochs=10, eval_metric='loss'):
-        
+
         if not isinstance(self.model, Ensemble):
             raise Exception("model must be Ensemble!!!")
-        
-        best_metric = 0.0
-        stacking_model = Stacking(len(self.model))
-        for param in stacking_model.parameters():
-            param.requires_grad = True
-        stacking_model.cuda()
-        running_loss = AverageMeter()
+
+        optimizer = get_optimizer(self.stacking_model.parameters(), self.cfg)
         ckp_dir = os.path.join('experiment', self.cfg.log_dir, 'checkpoint')
 
+        self.model.freeze()
+        self.stacking_model.unfreeze()
+        self.stacking_model.cuda()
+
+        running_loss = AverageMeter()
+        best_metric = 0.0
+
         for epoch in range(epochs):
-            stacking_model.train()
-            torch.set_grad_enabled(True)
+            self.stacking_model.train()
             for i, data in enumerate(tqdm.tqdm(train_loader)):
                 imgs, labels = data[0].to(self.device), data[1].to(self.device)
-                origin_pred = self.predict(imgs)
-                preds = stacking_model(origin_pred)
+                preds = self.stacking_model(self.model(imgs))
                 loss = self.metrics['loss'](preds, labels)
-                self.optimizer.zero_grad()
+                optimizer.zero_grad()
                 loss.backward()
-                self.optimizer.step()
+                optimizer.step()
                 running_loss.update(loss.item(), imgs.shape[0])
             s = "Epoch [{}/{}]:\n".format(
                 epoch+1, epochs)
             s += "{}_{} {:.3f}\n".format('train', 'loss', running_loss.avg)
-            stacking_model.eval()
-            preds_stack = []
-            labels_stack = []
-            for i, data in enumerate(tqdm.tqdm(val_loader)):
-                imgs, labels = data[0].to(self.device), data[1].to(self.device)
-                origin_pred = self.predict(imgs)
-                with torch.no_grad() as tng:
-                    preds = stacking_model(origin_pred)
-                preds_stack.append(preds)
-                labels_stack.append(labels)
-            preds_stack = torch.cat(preds_stack, 0)
-            labels_stack = torch.cat(labels_stack, 0)
-            running_metrics = get_metrics(preds_stack, labels_stack, self.metrics, self.thresh_val)
+            self.stacking_model.eval()
+            running_metrics = self.test(val_loader)
             running_metrics.pop('loss')
             s = get_str(running_metrics, 'val', s)
             metric_eval = running_metrics[eval_metric]
             s = s[:-1] + "- mean_"+eval_metric + \
-                    " {:.3f}".format(metric_eval.mean())
-            self.save_ckp(os.path.join(ckp_dir, 'latest.ckpt'), epoch, 0)
+                " {:.3f}".format(metric_eval.mean())
+            torch.save(self.stacking_model.state_dict(), os.path.join(ckp_dir, 'latest.ckpt'))
             running_loss.reset()
             print(s)
             if metric_eval.mean() > best_metric:
@@ -479,81 +475,3 @@ class CheXpert_model():
                 shutil.copyfile(os.path.join(ckp_dir, 'latest.ckpt'), os.path.join(
                     ckp_dir, 'best.ckpt'))
                 print('new checkpoint saved!')
-                        
-
-    def FAEL(self, loader, val_loader, type='basic', init_lr=0.01, log_iter=100, steps=20, lambda1=0.1, lambda2=2):
-        """Run fully associative ensemble learning (FAEL)
-
-        Args:
-            loader (torch.utils.data.Dataloader): dataloader use for training FAEL model
-            val_loader (torch.utils.data.Dataloader): dataloader use for validating FAEL model
-            type (str, optional): regularization type (basic/binary constraint). Defaults to 'basic'.
-            init_lr (float, optional): initial learning rate. Defaults to 0.01.
-            log_step (int, optional): logging step. Defaults to 100.
-            steps (int, optional): total steps. Defaults to 20.
-            lambda1 (float, optional): l2 regularization parameter. Defaults to 0.1.
-            lambda2 (int, optional): binary constraint parameter. Defaults to 2.
-
-        Returns:
-            dict: metrics use to evaluate model performance.
-        """
-        n_class = len(self.cfg.num_classes)
-        w = np.random.rand(n_class, len(self.id_obs))
-        iden_matrix = np.diag(np.ones(n_class))
-        lr = init_lr
-        start = time.time()
-        for i, data in enumerate(tqdm.tqdm(loader, total=log_iter*steps)):
-            imgs, labels = data[0].to(self.device), data[1]
-            preds = self.predict(imgs)
-            preds = tensor2numpy(preds)
-            labels = tensor2numpy(labels)
-            labels = labels[:, self.id_obs]
-            if type == 'basic':
-                grad = (preds.T.dot(preds) + lambda1*iden_matrix).dot(w) - \
-                    preds.T.dot(labels)
-            elif type == 'b_constraint':
-                grad = (preds.T.dot(preds) + lambda1*iden_matrix + lambda2 *
-                        self.M.T.dot(self.M)).dot(w) + - preds.T.dot(labels)
-            else:
-                raise Exception("Not support this type!!!")
-            w -= lr*grad
-            if (i+1) % log_iter == 0:
-                # print(w)
-                end = time.time()
-                print('iter {:d} time takes: {:.3f}s'.format(i+1, end-start))
-                start = time.time()
-                if (i+1)//log_iter == steps:
-                    break
-        if self.cfg.mix_precision:
-            self.ensemble_weights = torch.from_numpy(
-                w).type(torch.HalfTensor).to(self.device)
-        else:
-            self.ensemble_weights = torch.from_numpy(w).float().to(self.device)
-        print('Done Essemble!!!')
-        metrics = self.test(val_loader, ensemble=True)
-
-        return metrics
-
-    def save_FAEL_weight(self, path):
-        """save FAEL weight
-
-        Args:
-            path (str): path to saved weight.
-        """
-        with open(path, 'wb') as f:
-            pickle.dump(tensor2numpy(self.ensemble_weights.float()), f)
-
-    def load_FAEL_weight(self, path):
-        """load FAEL weight
-
-        Args:
-            path (str): path to saved weight
-            mix_precision (bool, optional): use mix precision for prediction. Defaults to False.
-        """
-        with open(path, 'rb') as f:
-            w = pickle.load(f)
-        if self.cfg.mix_precision:
-            self.ensemble_weights = torch.from_numpy(
-                w).type(torch.HalfTensor).to(self.device)
-        else:
-            self.ensemble_weights = torch.from_numpy(w).float().to(self.device)

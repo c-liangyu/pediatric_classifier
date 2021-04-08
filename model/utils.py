@@ -3,7 +3,6 @@ import torch
 import os
 import numpy as np
 from torch.optim import SGD, Adadelta, Adagrad, Adam, RMSprop
-from model.models import AverageMeter, ResNeSt_parallel, Efficient_parallel, Dense_parallel
 from resnest.torch import resnest50, resnest101, resnest200, resnest269
 from efficientnet_pytorch import EfficientNet
 from torchvision.models import densenet121, densenet161, densenet169, densenet201, resnet18, resnet34, resnet50, resnet101
@@ -33,7 +32,7 @@ def get_models(cfg):
         backbones = cfg.backbone
         ids = cfg.id
         ckp_paths = cfg.ckp_path
-        models = Ensemble(mean=False)
+        models = Ensemble()
         childs = []
         for i in range(len(backbones)):
             cfg.backbone = backbones[i]
@@ -46,8 +45,7 @@ def get_models(cfg):
         cfg.backbone = backbones
         cfg.id = ids
         cfg.ckp_path = ckp_paths
-        for param in models.parameters():
-            param.requires_grad = False
+        # models.freeze()
         return models, childs
 
 def get_model(cfg):
