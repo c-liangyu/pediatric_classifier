@@ -3,9 +3,9 @@
     "dev_csv": "annotations_cls_2203/val.csv",
     "test_csv": "annotations_cls_2203/test.csv",
     "backbone": "densenet",
-    "id": "169",
+    "id": "121",
     "device": 0,
-    "ensemble": "average",
+    "ensemble": "stacking",
     "mix_precision": true,
     "pretrained": false,
     "distributed": false,
@@ -31,8 +31,8 @@
     "epochs": 60,
     "iter_log": 40,
     "log_dir": "",
-    "ckp_path": "experiment/Densenet169_data2203_mixup/checkpoint/best.ckpt",
-    "ckp_stack": "experiment/stacking_example/checkpoint/best.ckpt",
+    "ckp_path": "experiment/trash/checkpoint/best.ckpt",
+    "ckp_stack": "experiment/stacking_example_3/checkpoint/best.ckpt",
     "disease_classes": ["Other opacity", "Reticulonodular opacity", "Peribronchovascular interstitial opacity", "Diffuse aveolar opacity", "Lung hyperinflation",
         "Consolidation", "Bronchial thickening", "No finding", "Bronchitis", "Brocho-pneumonia", "Other disease", "Bronchiolitis", "Pneumonia"]
 }

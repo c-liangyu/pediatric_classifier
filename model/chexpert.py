@@ -58,6 +58,8 @@ class CheXpert_model():
             if os.path.isfile(self.cfg.ckp_stack):
                 self.stacking_model.load_state_dict(torch.load(
                     self.cfg.ckp_stack, map_location=torch.device("cpu")))
+                for name, param in self.stacking_model.named_parameters():
+                    print(name, param.data)
                 self.stacking_model.cuda()
             self.stacking_model.freeze()
         self.loss_func = loss_func
@@ -476,7 +478,6 @@ class CheXpert_model():
             torch.save(self.stacking_model.state_dict(), os.path.join(ckp_dir, 'latest.ckpt'))
             running_loss.reset()
             scheduler.step()
-            print('current lr: {:.4f}'.format(scheduler.get_lr()[0]))
             print(s)
             if metric_eval.mean() > best_metric:
                 best_metric = metric_eval.mean()

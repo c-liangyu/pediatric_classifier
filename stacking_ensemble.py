@@ -32,7 +32,7 @@ if cfg.distributed:
 else:
     torch.cuda.set_device(cfg.device)
 
-data_dir = '/home/tungthanhlee/thanhtt/assigned_jpeg'
+data_dir = '/home/single1/BACKUP/thanhtt/assigned_jpeg'
 
 train_loader = create_loader(cfg.train_csv, data_dir, cfg, mode='train', dicom=False, type=cfg.type)
 val_loader = create_loader(cfg.dev_csv, data_dir, cfg, mode='val', dicom=False, type=cfg.type)
