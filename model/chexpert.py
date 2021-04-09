@@ -439,6 +439,9 @@ class CheXpert_model():
             raise Exception("model must be Ensemble!!!")
 
         optimizer = get_optimizer(self.stacking_model.parameters(), self.cfg)
+        lambda1 = lambda epoch: 0.9 ** epoch
+        scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lambda1)
+
         os.makedirs(os.path.join('experiment', self.cfg.log_dir), exist_ok=True)
         ckp_dir = os.path.join('experiment', self.cfg.log_dir, 'checkpoint')
         os.makedirs(ckp_dir, exist_ok=True)
@@ -472,6 +475,8 @@ class CheXpert_model():
                 " {:.3f}".format(metric_eval.mean())
             torch.save(self.stacking_model.state_dict(), os.path.join(ckp_dir, 'latest.ckpt'))
             running_loss.reset()
+            scheduler.step()
+            print('current lr: {:.4f}'.format(scheduler.get_lr()[0]))
             print(s)
             if metric_eval.mean() > best_metric:
                 best_metric = metric_eval.mean()

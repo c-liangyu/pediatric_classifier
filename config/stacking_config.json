@@ -13,7 +13,7 @@
     "type": "pediatric",
     "conditional_training": false,
     "smooth_mode": "pos",
-    "lr": 1e-3,
+    "lr": 1e-2,
     "batch_size": 64,
     "long_side": 512,
     "tta": false,
