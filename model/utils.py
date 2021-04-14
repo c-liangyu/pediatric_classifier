@@ -152,6 +152,7 @@ def load_ckp(model, ckp_path, device, parallel=False, strict=True):
 
 def get_device(device=''):
     # device = 'cpu' or '0' or '0,1,2,3'
+    device = str(device)
     cpu = device.lower() == 'cpu'
     if cpu:
         os.environ['CUDA_VISIBLE_DEVICES'] = '-1'  # force torch.cuda.is_available() = False

@@ -307,7 +307,7 @@ class CheXpert_model():
                 if wandb:
                     for key in running_metrics_test.keys():
                         if key != 'loss':
-                            for j, disease_class in enumerate(np.array(train_loader.dataset.disease_classes)[train_loader.dataset.id_leaf]):
+                            for j, disease_class in enumerate(np.array(train_loader.dataset.disease_classes)):
                                 wandb.log(
                                     {key+'/'+disease_class: running_metrics_test[key][j]}, step=(epoch*n_iter)+(i+1))
                         else:
