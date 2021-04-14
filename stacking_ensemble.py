@@ -11,26 +11,11 @@ import argparse
 # warnings.simplefilter('always')
 warnings.filterwarnings("ignore")
 
-parser = argparse.ArgumentParser(description='PyTorch ImageNet Training')
-parser.add_argument("--local_rank", default=0, type=int)
-args = parser.parse_args()
-
-
 # cfg_path = './config/chexmic_config.json'
 cfg_path = './config/stacking_config.json'
 
 with open(cfg_path) as f:
     cfg = edict(json.load(f))
-
-if cfg.distributed:
-    print('here')
-    cfg.device = args.local_rank
-    torch.cuda.set_device(cfg.device)
-    torch.distributed.init_process_group(backend='nccl',
-                                            init_method='env://')
-    cfg.world_size = torch.distributed.get_world_size()
-else:
-    torch.cuda.set_device(cfg.device)
 
 data_dir = '/home/single1/BACKUP/thanhtt/assigned_jpeg'
 

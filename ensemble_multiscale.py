@@ -21,10 +21,6 @@ from model.utils import tensor2numpy
 # warnings.simplefilter('always')
 warnings.filterwarnings("ignore")
 
-parser = argparse.ArgumentParser(description='PyTorch ImageNet Training')
-parser.add_argument("--local_rank", default=0, type=int)
-args = parser.parse_args()
-
 cfg_path = './config/ensemble_config.json'
 # cfg_path = './config/example2.json'
 
@@ -41,16 +37,6 @@ else:
     raise Exception("'batch_size' and 'long_side' in config file should be same instance!!!")
 
 loss_func = BCEWithLogitsLoss()
-
-if cfg.distributed:
-    print('here')
-    cfg.device = args.local_rank
-    torch.cuda.set_device(cfg.device)
-    torch.distributed.init_process_group(backend='nccl',
-                                            init_method='env://')
-    cfg.world_size = torch.distributed.get_world_size()
-else:
-    torch.cuda.set_device(cfg.device)
 
 # data_dir = '/home/tungthanhlee/bdi_xray/data/images'
 data_dir = '/home/dual1/thanhtt/assigned_jpeg'

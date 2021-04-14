@@ -8,7 +8,6 @@ from efficientnet_pytorch import EfficientNet
 from torchvision.models import densenet121, densenet161, densenet169, densenet201, resnet18, resnet34, resnet50, resnet101
 from model.models import Ensemble
 
-
 def get_optimizer(params, cfg):
     if cfg.optimizer == 'SGD':
         return SGD(params, lr=cfg.lr, momentum=cfg.momentum,
@@ -40,12 +39,11 @@ def get_models(cfg):
             cfg.ckp_path = ckp_paths[i]
             model, childs_cut = get_model(cfg)
             if os.path.isfile(cfg.ckp_path):
-                load_ckp(model, cfg.ckp_path, torch.device("cpu"), cfg.distributed, cfg.parallel, strict=True)
+                load_ckp(model, cfg.ckp_path, torch.device("cpu"), cfg.parallel, strict=True)
             models.append(model), childs.append(childs_cut)
         cfg.backbone = backbones
         cfg.id = ids
         cfg.ckp_path = ckp_paths
-        # models.freeze()
         return models, childs
 
 def get_model(cfg):
@@ -134,7 +132,7 @@ def get_efficientnet(id_model, num_classes, pretrained=True):
                             out_features=len(num_classes), bias=True)
     return model, childs_cut
 
-def load_ckp(model, ckp_path, device, distributed=False, parallel=False, strict=True):
+def load_ckp(model, ckp_path, device, parallel=False, strict=True):
     """Load checkpoint
 
     Args:
@@ -144,15 +142,26 @@ def load_ckp(model, ckp_path, device, distributed=False, parallel=False, strict=
         int, int: current epoch, current iteration
     """
     ckp = torch.load(ckp_path, map_location=device)
-    if distributed:
-        model.module.load_state_dict(ckp['state_dict'], strict=strict)
-    elif parallel:
+    if parallel:
         model.module.load_state_dict(
             ckp['state_dict'], strict=strict)
     else:
         model.load_state_dict(ckp['state_dict'], strict=strict)
 
     return ckp['epoch'], ckp['iter']
+
+def get_device(device=''):
+    # device = 'cpu' or '0' or '0,1,2,3'
+    cpu = device.lower() == 'cpu'
+    if cpu:
+        os.environ['CUDA_VISIBLE_DEVICES'] = '-1'  # force torch.cuda.is_available() = False
+    elif device:  # non-cpu device requested
+        os.environ['CUDA_VISIBLE_DEVICES'] = device  # set environment variable
+        assert torch.cuda.is_available(), f'CUDA unavailable, invalid device {device} requested'  # check availability
+
+    cuda = not cpu and torch.cuda.is_available()
+    
+    return torch.device('cuda:'+device if cuda else 'cpu')
 
 def get_metrics(preds, labels, metrics_dict, thresh_val=0.5):
 

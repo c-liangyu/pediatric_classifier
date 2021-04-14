@@ -14,21 +14,11 @@ import wandb
 from metrics import AUC_ROC
 from data.utils import transform
 from model.models import Stacking, save_dense_backbone, load_dense_backbone, save_resnet_backbone, load_resnet_backbone, Ensemble, AverageMeter
-from model.utils import get_models, get_str, tensor2numpy, get_optimizer, load_ckp, lrfn, get_metrics
+from model.utils import get_models, get_str, tensor2numpy, get_optimizer, load_ckp, lrfn, get_metrics, get_device
 from confidence_interval import boostrap_ci
 
 
 class CheXpert_model():
-    id_obs = [2, 5, 6, 8, 10]
-    # id_obs = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
-    id_leaf = [2, 4, 5, 6, 7, 8]
-    id_parent = [0, 1, 3, 9, 10, 11, 12, 13]
-    M = np.array([[0, 1, -2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-                  [0, 0, 0, 1, -2, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-                  [0, 0, 0, 1, 0, -2, 0, 0, 0, 0, 0, 0, 0, 0],
-                  [0, 0, 0, 1, 0, 0, -2, 0, 0, 0, 0, 0, 0, 0],
-                  [0, 0, 0, 1, 0, 0, 0, -2, 0, 0, 0, 0, 0, 0],
-                  [0, 0, 0, 1, 0, 0, 0, 0, -2, 0, 0, 0, 0, 0]])
 
     def __init__(self, cfg, loss_func, metrics=None):
         """CheXpert class contains all functions used for training and testing our models
@@ -47,20 +37,14 @@ class CheXpert_model():
             self.cfg.num_classes = 14*[1]
         else:
             self.cfg.num_classes = [1]
-            # self.cfg.disease_classes = ['No finding']
-        if self.cfg.device == 'cpu':
-            self.device = torch.device("cpu")
-        else:
-            self.device = torch.device("cuda:"+str(self.cfg.device))
+        self.device = get_device(self.cfg.device)
         self.model, self.childs_cut = get_models(self.cfg)
         if self.cfg.ensemble == 'stacking':
             self.stacking_model = Stacking(len(self.model))
             if os.path.isfile(self.cfg.ckp_stack):
                 self.stacking_model.load_state_dict(torch.load(
                     self.cfg.ckp_stack, map_location=torch.device("cpu")))
-                for name, param in self.stacking_model.named_parameters():
-                    print(name, param.data)
-                self.stacking_model.cuda()
+                self.stacking_model.to(self.device)
             self.stacking_model.freeze()
         self.loss_func = loss_func
         if metrics is not None:
@@ -68,27 +52,18 @@ class CheXpert_model():
             self.metrics['loss'] = self.loss_func
         else:
             self.metrics = {'loss': self.loss_func}
-        # self.model.to(self.device)
-        if cfg.distributed:
-            self.model.cuda()
-            self.model = torch.nn.parallel.DistributedDataParallel(
-                self.model, device_ids=[self.cfg.device], broadcast_buffers=False)
-        elif cfg.parallel:
+        if cfg.parallel:
             self.model = torch.nn.DataParallel(self.model)
-            self.model.cuda()
-        else:
-            self.model.cuda()
+        self.model.to(self.device)
 
         self.thresh_val = torch.Tensor(
-            [0.5]*len(self.cfg.num_classes)).float().cuda()
+            [0.5]*len(self.cfg.num_classes)).float().to(self.device)
 
     def freeze_backbone(self):
         """Freeze model backbone
         """
         ct = 0
-        if self.cfg.distributed:
-            model_part = self.model.module
-        elif self.cfg.parallel:
+        if self.cfg.parallel:
             model_part = self.model.module
         else:
             model_part = self.model
@@ -103,9 +78,7 @@ class CheXpert_model():
                     param.requires_grad = False
 
     def save_backbone(self, ckp_path):
-        if self.cfg.distributed:
-            model_part = self.model.module
-        elif self.cfg.parallel:
+        if self.cfg.parallel:
             model_part = self.model.module
         else:
             model_part = self.model
@@ -116,9 +89,7 @@ class CheXpert_model():
             save_resnet_backbone(model_part, ckp_path)
 
     def load_backbone(self, ckp_path, strict=True):
-        if self.cfg.distributed:
-            model_part = self.model.module
-        elif self.cfg.parallel:
+        if self.cfg.parallel:
             model_part = self.model.module
         else:
             model_part = self.model
@@ -137,7 +108,7 @@ class CheXpert_model():
         Returns:
             int, int: current epoch, current iteration
         """
-        return load_ckp(self.model, ckp_path, self.device, self.cfg.distributed, self.cfg.parallel, strict)
+        return load_ckp(self.model, ckp_path, self.device, self.cfg.parallel, strict)
 
     def save_ckp(self, ckp_path, epoch, iter):
         """Save checkpoint
@@ -151,7 +122,7 @@ class CheXpert_model():
             torch.save(
                 {'epoch': epoch+1,
                  'iter': iter+1,
-                 'state_dict': self.model.module.state_dict() if (self.cfg.distributed or self.cfg.parallel) else self.model.state_dict()},
+                 'state_dict': self.model.module.state_dict() if self.cfg.parallel else self.model.state_dict()},
                 ckp_path
             )
         else:
@@ -207,7 +178,7 @@ class CheXpert_model():
         preds_stack = []
         labels_stack = []
         running_loss = []
-        ova_len = loader.dataset._num_image
+        ova_len = loader.dataset.n_data
         loop = tqdm.tqdm(enumerate(loader), total=len(loader))
         for i, data in loop:
             imgs, labels = data[0].to(self.device), data[1].to(self.device)
@@ -222,9 +193,6 @@ class CheXpert_model():
                 preds = torch.stack(list_preds, dim=0).mean(dim=0)
             else:
                 preds = self.predict(imgs)
-            if self.cfg.conditional_training and (self.cfg.type == 'pediatric' or self.cfg.type == 'chexmic'):
-                preds = preds[:, loader.dataset.id_leaf]
-                labels = labels[:, loader.dataset.id_leaf]
             iter_len = imgs.size()[0]
             preds_stack.append(preds)
             labels_stack.append(labels)
@@ -251,24 +219,20 @@ class CheXpert_model():
             writer (torch.utils.tensorboard.SummaryWriter, optional): tensorboard summery writer. Defaults to None.
             eval_metric (str, optional): name of metric for validation. Defaults to 'loss'.
         """
-        # wandb.init(name=self.cfg.log_dir,
-        #            project='Pediatric Multi-label Classifier',
-        #            entity='dolphin')
+        wandb.init(name=self.cfg.log_dir,
+                   project='Pediatric Multi-label Classifier',
+                   entity='dolphin')
 
         optimizer = get_optimizer(self.model.parameters(), self.cfg)
 
         if use_lr_sch:
             lr_sch = torch.optim.lr_scheduler.LambdaLR(
                 optimizer, lr_lambda=lrfn)
-            # lr_sch = torch.optim.lr_scheduler.StepLR(
-            #     optimizer, int(epochs*1/2), self.cfg.lr/10)
             lr_hist = []
         else:
             lr_sch = None
         best_metric = 0.0
 
-        if self.cfg.conditional_training and (self.cfg.type == 'pediatric' or self.cfg.type == 'chexmic'):
-            self.thresh_val = self.thresh_val[train_loader.dataset.id_leaf]
         if os.path.exists(ckp_dir) != True:
             os.mkdir(ckp_dir)
         if resume:
@@ -307,41 +271,16 @@ class CheXpert_model():
                     data = next(iter_loader)
                     imgs, labels = data[0].to(
                         self.device), data[1].to(self.device)
-                    # r = np.random.rand(1)
-                    # use_cutmix = self.cfg.beta > 0 and r < self.cfg.cutmix_prob
-                    # if use_cutmix:
-                    #     # generate mixed sample
-                    #     lam = np.random.beta(self.cfg.beta, self.cfg.beta)
-                    #     rand_index = torch.randperm(imgs.size()[0]).cuda()
-                    #     target_a = labels
-                    #     target_b = labels[rand_index]
-                    #     bbx1, bby1, bbx2, bby2 = rand_bbox(imgs.size(), lam)
-                    #     imgs[:, :, bbx1:bbx2, bby1:bby2] = imgs[rand_index, :, bbx1:bbx2, bby1:bby2]
-                    #     # adjust lambda to exactly match pixel ratio
-                    #     lam = 1 - ((bbx2 - bbx1) * (bby2 - bby1) / (imgs.size()[-1] * imgs.size()[-2]))
 
                     if self.cfg.mix_precision:
                         with torch.cuda.amp.autocast():
                             preds = self.model(imgs)
-                            if self.cfg.conditional_training and (self.cfg.type == 'pediatric' or self.cfg.type == 'chexmic'):
-                                preds = preds[:, train_loader.dataset.id_leaf]
-                                labels = labels[:,
-                                                train_loader.dataset.id_leaf]
                             loss = self.metrics['loss'](preds, labels)
-                            # if use_cutmix:
-                            #     loss = self.metrics['loss'](preds, target_a) * lam + self.metrics['loss'](preds, target_b) * (1. - lam)
-                            # else:
-                            #     loss = self.metrics['loss'](preds, labels)
+                
                     else:
                         preds = self.model(imgs)
-                        if self.cfg.conditional_training and (self.cfg.type == 'pediatric' or self.cfg.type == 'chexmic'):
-                            preds = preds[:, train_loader.dataset.id_leaf]
-                            labels = labels[:, train_loader.dataset.id_leaf]
                         loss = self.metrics['loss'](preds, labels)
-                        # if use_cutmix:
-                        #     loss = self.metrics['loss'](preds, target_a) * lam + self.metrics['loss'](preds, target_b) * (1. - lam)
-                        # else:
-                        #     loss = self.metrics['loss'](preds, labels)
+
                     preds = nn.Sigmoid()(preds)
                     running_loss.update(loss.item(), imgs.shape[0])
                     optimizer.zero_grad()
@@ -354,9 +293,9 @@ class CheXpert_model():
                         optimizer.step()
                     i += 1
 
-                # if wandb:
-                #     wandb.log(
-                #         {'loss/train': running_metrics['loss']}, step=(epoch*n_iter)+(i+1))
+                if wandb:
+                    wandb.log(
+                        {'loss/train': running_loss.avg}, step=(epoch*n_iter)+(i+1))
                 s = "Epoch [{}/{}] Iter [{}/{}]:\n".format(
                     epoch+1, epochs, i+1, n_iter)
                 s += "{}_{} {:.3f}\n".format('train', 'loss', running_loss.avg)
@@ -365,15 +304,15 @@ class CheXpert_model():
                 torch.set_grad_enabled(True)
                 self.model.train()
                 s = get_str(running_metrics_test, 'val', s)
-                # if wandb:
-                #     for key in running_metrics_test.keys():
-                #         if key != 'loss':
-                #             for j, disease_class in enumerate(np.array(train_loader.dataset.disease_classes)[train_loader.dataset.id_leaf]):
-                #                 wandb.log(
-                #                     {key+'/'+disease_class: running_metrics_test[key][j]}, step=(epoch*n_iter)+(i+1))
-                #         else:
-                #             wandb.log(
-                #                 {'loss/val': running_metrics_test['loss']}, step=(epoch*n_iter)+(i+1))
+                if wandb:
+                    for key in running_metrics_test.keys():
+                        if key != 'loss':
+                            for j, disease_class in enumerate(np.array(train_loader.dataset.disease_classes)[train_loader.dataset.id_leaf]):
+                                wandb.log(
+                                    {key+'/'+disease_class: running_metrics_test[key][j]}, step=(epoch*n_iter)+(i+1))
+                        else:
+                            wandb.log(
+                                {'loss/val': running_metrics_test['loss']}, step=(epoch*n_iter)+(i+1))
                 if self.cfg.type != 'chexmic':
                     metric_eval = running_metrics_test[eval_metric]
                 else:
@@ -410,8 +349,6 @@ class CheXpert_model():
         Returns:
             dict: metrics use to evaluate model performance.
         """
-        # if self.cfg.conditional_training and (self.cfg.type == 'pediatric' or self.cfg.type == 'chexmic'):
-        #     self.thresh_val = self.thresh_val[loader.dataset.id_leaf]
         preds_stack, labels_stack, running_loss = self.predict_loader(
             loader, cal_loss=True)
 
